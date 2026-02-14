@@ -170,6 +170,21 @@
 <script type="module">
     import * as THREE from 'https://unpkg.com/three@0.146.0/build/three.module.js';
 
+    // Stop background music when the page is hidden or closed
+    window.addEventListener('pagehide', stopBGM, {capture: true});
+    window.addEventListener('visibilitychange', function() {
+        if (document.hidden) stopBGM();
+    });
+    window.addEventListener('beforeunload', stopBGM);
+
+    function stopBGM() {
+        const bgm = document.getElementById('bgm');
+        if (bgm) {
+            bgm.pause();
+            bgm.currentTime = 0;
+        }
+    }
+
     // --- TEXTURE GENERATOR ---
     function generateTexture(colorHex, type) {
         const size = 64; 
