@@ -1,0 +1,700 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Love Rush: 9 Years Edition</title>
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+    <style>
+        body { 
+            margin: 0; overflow: hidden; background: #87CEEB; 
+            font-family: 'Press Start 2P', cursive;
+            transition: background 2s; 
+        }
+        
+        canvas {
+            display: block; width: 100%; height: 100%;
+            image-rendering: pixelated; 
+        }
+
+        #ui-layer {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            pointer-events: none;
+            display: flex; flex-direction: column; justify-content: space-between;
+            padding: 20px; box-sizing: border-box; z-index: 5;
+        }
+
+        .hud-top {
+            display: flex; justify-content: space-between; align-items: center;
+            color: #fff; text-shadow: 4px 4px 0px #000; font-size: 16px;
+        }
+        
+        .night-text { 
+            color: #ff0000 !important; 
+            text-shadow: 4px 4px 0px #330000 !important;
+            animation: glitch 0.2s infinite;
+        }
+
+        #score { color: #ff66aa; }
+        #lives { letter-spacing: 5px; }
+        
+        #message-banner {
+            position: absolute; top: 30%; width: 100%;
+            text-align: center; font-size: 24px;
+            color: #fff; text-shadow: 4px 4px 0 #ff0055;
+            display: none; line-height: 1.5;
+        }
+
+        #whisper-text {
+            position: absolute; top: 15%; width: 100%;
+            text-align: center; font-size: 12px;
+            color: rgba(255,255,255,0.9); text-transform: uppercase;
+            text-shadow: 2px 2px 0 #000;
+        }
+
+        /* MEMORY OVERLAY */
+        #memory-overlay {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0, 0, 0, 0.85); 
+            display: flex; flex-direction: column; justify-content: center; align-items: center;
+            opacity: 0; pointer-events: none; transition: opacity 0.1s ease; z-index: 50;
+        }
+        #memory-overlay.show { opacity: 1; pointer-events: auto; }
+
+        #polaroid {
+            background: white; padding: 15px 15px 50px 15px;
+            border: 4px solid #000; transform: rotate(-3deg) scale(0.8);
+            text-align: center;
+        }
+        
+        #memory-img { 
+            max-width: 70vw; max-height: 40vh; 
+            display: block; border: 4px solid #000;
+            image-rendering: pixelated;
+        }
+        #memory-caption { margin-top: 20px; color: #000; font-size: 12px; line-height: 1.5; }
+
+        #vignette {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: radial-gradient(circle, transparent 40%, black 140%);
+            opacity: 0; pointer-events: none; transition: opacity 2s; z-index: 1;
+        }
+        
+        @keyframes glitch {
+            0% { transform: translate(0) } 20% { transform: translate(-4px, 4px) }
+            40% { transform: translate(-4px, -4px) } 60% { transform: translate(4px, 4px) }
+            80% { transform: translate(4px, -4px) } 100% { transform: translate(0) }
+        }
+
+        #menu, #start-screen {
+            position: absolute; top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            background: #000; padding: 40px; 
+            border: 4px solid #fff; box-shadow: 8px 8px 0px #ff0055;
+            text-align: center; color: #fff;
+            pointer-events: auto; min-width: 300px; z-index: 100;
+        }
+        #menu { display: none; }
+        h1 { margin: 0 0 20px 0; color: #ff0055; font-size: 20px; line-height: 1.5; }
+        p { color: #ccc; margin-bottom: 30px; font-size: 10px; line-height: 2; }
+        button {
+            background: #ff0055; color: white; border: 4px solid #fff;
+            padding: 15px 20px; font-size: 12px; font-family: 'Press Start 2P', cursive;
+            cursor: pointer; 
+        }
+        button:hover { background: #ff3377; transform: translateY(-4px); }
+        button:active { transform: translateY(0); }
+    </style>
+</head>
+<body>
+
+<div id="vignette"></div>
+
+<div id="ui-layer">
+    <div id="whisper-text"></div>
+    <div class="hud-top" id="hud">
+        <div id="score">SCORE: 0 / 50</div>
+        <div id="lives">❤️❤️❤️❤️❤️</div>
+    </div>
+    <div id="message-banner"></div>
+    
+    <div id="memory-overlay">
+        <div id="polaroid">
+            <img id="memory-img" src="" alt="Memory">
+            <div id="memory-caption">A CORE MEMORY</div>
+        </div>
+    </div>
+</div>
+
+<div id="start-screen">
+    <h1>LOVE RUSH<br>3,287 DAYS</h1>
+    <p>ROUGH TERRAIN AHEAD.<br>SURVIVE THE NIGHT.</p>
+    <button id="start-btn" onclick="startGame()">START ENGINE</button>
+</div>
+
+<div id="menu">
+    <h1 id="menu-title">GAME OVER</h1>
+    <p id="menu-msg">TRY AGAIN?</p>
+    <button onclick="restartGame()">RESTART</button>
+</div>
+
+<audio id="bgm" loop preload="auto">
+    <source src="https://files.freemusicarchive.org/storage-freemusicarchive-org/music/True_Chip_Till_Death/8bit_Betty/too_bleep_to_bloop/8bit_Betty_-_01_-_Was_that_away_message_for_me.mp3" type="audio/mp3">
+</audio>
+
+<script type="module">
+    import * as THREE from 'https://unpkg.com/three@0.146.0/build/three.module.js';
+
+    // --- TEXTURE GENERATOR ---
+    function generateTexture(colorHex, type) {
+        const size = 64; 
+        const canvas = document.createElement('canvas');
+        canvas.width = size; canvas.height = size;
+        const ctx = canvas.getContext('2d');
+        ctx.fillStyle = colorHex; ctx.fillRect(0,0,size,size);
+        for (let i = 0; i < 400; i++) {
+            const x = Math.floor(Math.random() * size);
+            const y = Math.floor(Math.random() * size);
+            const opacity = Math.random() * 0.3;
+            ctx.fillStyle = (Math.random() > 0.5 ? '#000000' : '#331a00');
+            ctx.globalAlpha = opacity; ctx.fillRect(x, y, 2, 2); 
+        }
+        ctx.globalAlpha = 1.0;
+        if (type === 'road') {
+            ctx.fillStyle = '#654321'; 
+            for(let i=0; i<10; i++) ctx.fillRect(Math.random()*size, Math.random()*size, 10, 2);
+        } else if (type === 'grass') {
+            for(let i=0; i<20; i++){
+                ctx.fillStyle = '#1a3300'; ctx.fillRect(Math.random()*size, Math.random()*size, 4, 4);
+            }
+        }
+        const texture = new THREE.CanvasTexture(canvas);
+        texture.magFilter = THREE.NearestFilter; texture.minFilter = THREE.NearestFilter;
+        texture.wrapS = THREE.RepeatWrapping; texture.wrapT = THREE.RepeatWrapping;
+        return texture;
+    }
+
+    // --- ASSETS ---
+    const grassTexture = generateTexture('#567d46', 'grass'); grassTexture.repeat.set(20, 20);
+    const roadTexture = generateTexture('#8B4513', 'road'); roadTexture.repeat.set(1, 10);
+    const treeTexture = generateTexture('#2d4c1e', 'tree');
+    const carTexture = generateTexture('#ff3333', 'noise');
+    const metalTexture = generateTexture('#aaaaaa', 'noise');
+
+    const memoryImages = [
+        "https://i.ibb.co/nsMkL9CB/IMG20191018154313.jpg", 
+        "https://i.ibb.co/TqRtzNcs/received-2005221266521069.jpg",
+        "https://i.ibb.co/PZ26v8K0/received-332267555811883.jpg", 
+        "https://i.ibb.co/WWT6TRKN/received-451648010489329.jpg",
+        "https://i.ibb.co/7JVKwXdk/received-981982280004965.jpg",
+        "https://i.ibb.co/6JVxhfYR/received-297551319641061.jpg",
+        "https://i.ibb.co/Mxk2LgVj/received-848853299970870.jpg"
+    ];
+
+    // --- WHISPERS ---
+    const dayWhispers = [
+        "3,287 DAYS", "COUNTING EVERY SECOND", "LOVE YOU", "HOLD TIGHT", "TOGETHER",
+        "MY CO-PILOT", "YOU ARE MY HOME", "ADVENTURE TIME", "JUST US TWO",
+        "HAND IN HAND", "FOREVER", "MY SUNSHINE", "KEEP DRIVING", "SAFE HERE",
+        "YOU'RE MY WORLD", "MY PLAYER 2", "BEST VIEW IS YOU", "WORTH THE RIDE",
+        "MY SAFE PLACE", "I GOT YOU", "NO END IN SIGHT", "JUST YOU & ME",
+        "MY FAVORITE VIEW", "HEART RACING", "MY EVERYTHING", "DRIVING HOME",
+        "ALWAYS YOURS", "YOU LIGHT THE WAY"
+    ];
+    const nightWhispers = [
+        "RUN", "DONT LOOK BACK", "THEY WATCH", "BEHIND YOU",
+        "WAKE UP", "IM COLD", "NO ESCAPE", "DO NOT STOP", "IT SEES YOU",
+        "TURN AROUND", "HELP ME", "LOST FOREVER", "VOID",
+        "STATIC NOISE", "IT'S CLOSER", "DONT BLINK", "SIGNAL LOST", "ALONE?",
+        "RED FOG", "GHOSTS AHEAD", "DARKNESS FALLS", "CAN YOU HEAR IT?"
+    ];
+
+    // --- AUDIO ---
+    const AudioContext = window.AudioContext || window.webkitAudioContext;
+    const audioCtx = new AudioContext();
+    let heartbeatInterval;
+
+    function startHeartbeat() {
+        if (heartbeatInterval) return;
+        heartbeatInterval = setInterval(() => {
+            const now = audioCtx.currentTime;
+            const osc = audioCtx.createOscillator(); const gain = audioCtx.createGain();
+            osc.connect(gain); gain.connect(audioCtx.destination);
+            osc.type = 'square'; osc.frequency.setValueAtTime(50, now);
+            osc.frequency.exponentialRampToValueAtTime(10, now + 0.1);
+            gain.gain.setValueAtTime(0.3, now); gain.gain.exponentialRampToValueAtTime(0.01, now + 0.1);
+            osc.start(now); osc.stop(now + 0.1);
+            
+            const osc2 = audioCtx.createOscillator(); const gain2 = audioCtx.createGain();
+            osc2.connect(gain2); gain2.connect(audioCtx.destination);
+            osc2.type = 'square'; osc2.frequency.setValueAtTime(50, now + 0.25);
+            osc2.frequency.exponentialRampToValueAtTime(10, now + 0.35);
+            gain2.gain.setValueAtTime(0.2, now + 0.25); gain2.gain.exponentialRampToValueAtTime(0.01, now + 0.35);
+            osc2.start(now + 0.25); osc2.stop(now + 0.35);
+        }, 800);
+    }
+
+    function stopHeartbeat() { clearInterval(heartbeatInterval); heartbeatInterval = null; }
+
+    function playSound(type) {
+        if (audioCtx.state === 'suspended') audioCtx.resume();
+        const osc = audioCtx.createOscillator(); const gain = audioCtx.createGain();
+        osc.connect(gain); gain.connect(audioCtx.destination);
+        const now = audioCtx.currentTime;
+
+        if (type === 'coin') {
+            osc.type = 'square'; osc.frequency.setValueAtTime(600, now);
+            osc.frequency.setValueAtTime(1200, now + 0.1);
+            gain.gain.setValueAtTime(0.1, now); gain.gain.linearRampToValueAtTime(0, now + 0.2);
+            osc.start(now); osc.stop(now + 0.2);
+        } else if (type === 'shield') {
+            osc.type = 'sawtooth'; osc.frequency.setValueAtTime(200, now);
+            osc.frequency.linearRampToValueAtTime(1000, now + 0.5);
+            gain.gain.setValueAtTime(0.2, now); gain.gain.linearRampToValueAtTime(0, now + 0.5);
+            osc.start(now); osc.stop(now + 0.5);
+        } else if (type === 'mud') {
+            osc.type = 'triangle'; osc.frequency.setValueAtTime(150, now);
+            osc.frequency.linearRampToValueAtTime(50, now + 0.2);
+            gain.gain.setValueAtTime(0.3, now); gain.gain.linearRampToValueAtTime(0, now + 0.2);
+            osc.start(now); osc.stop(now + 0.2);
+        } else if (type === 'ring') {
+            const play = (f, t) => {
+                const o=audioCtx.createOscillator(); const g=audioCtx.createGain();
+                o.connect(g); g.connect(audioCtx.destination); o.type='sine';
+                o.frequency.value=f; g.gain.setValueAtTime(0.2, t); g.gain.exponentialRampToValueAtTime(0.01, t+0.5);
+                o.start(t); o.stop(t+0.5);
+            }
+            play(1200, now); play(1800, now+0.1); // Sparkle sound
+        } else if (type === 'hit') {
+            const bufferSize = audioCtx.sampleRate * 0.1;
+            const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+            const data = buffer.getChannelData(0);
+            for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
+            const noise = audioCtx.createBufferSource(); noise.buffer = buffer;
+            const nGain = audioCtx.createGain(); nGain.gain.value = 0.3;
+            noise.connect(nGain); nGain.connect(audioCtx.destination); noise.start(now);
+        } else if (type === 'win') {
+            const play = (f, t) => {
+                const o=audioCtx.createOscillator(); const g=audioCtx.createGain();
+                o.connect(g); g.connect(audioCtx.destination); o.type='square';
+                o.frequency.value=f; g.gain.value=0.1; o.start(t); o.stop(t+0.1);
+            };
+            play(523, now); play(659, now+0.1); play(783, now+0.2); play(1046, now+0.3);
+        }
+    }
+
+    // --- GAME CONFIG ---
+    const TARGET_SCORE = 50; 
+    let gameSpeed = 0.3; let score = 0; let health = 5;
+    let isGameOver = true; let isPaused = false; 
+    let isNight = false; let isInvincible = false; let lastNightScore = 0;
+    let whisperInterval; let isRaining = false;
+
+    // --- SCENE SETUP ---
+    const scene = new THREE.Scene();
+    const DAY_COLOR = 0x87CEEB; const NIGHT_COLOR = 0x110000;
+    scene.background = new THREE.Color(DAY_COLOR); 
+    scene.fog = new THREE.Fog(DAY_COLOR, 10, 40);
+
+    const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 100);
+    camera.position.set(0, 4, 8); camera.rotation.x = -0.4;
+
+    const renderer = new THREE.WebGLRenderer({ antialias: false });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    document.body.appendChild(renderer.domElement);
+
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.7); scene.add(ambientLight);
+    const dirLight = new THREE.DirectionalLight(0xfffaed, 1.0);
+    dirLight.position.set(20, 50, 20); dirLight.castShadow = true; scene.add(dirLight);
+
+    const worldGroup = new THREE.Group(); scene.add(worldGroup);
+
+    // GRASS
+    const grassGeo = new THREE.PlaneGeometry(200, 200);
+    const grassMat = new THREE.MeshStandardMaterial({ map: grassTexture, roughness: 1 });
+    const grass = new THREE.Mesh(grassGeo, grassMat);
+    grass.rotation.x = -Math.PI / 2; grass.position.y = -1.1; grass.receiveShadow = true; worldGroup.add(grass);
+
+    // TRAIL
+    const roadGeo = new THREE.PlaneGeometry(6, 200);
+    const roadMat = new THREE.MeshStandardMaterial({ map: roadTexture, roughness: 1.0 });
+    const road = new THREE.Mesh(roadGeo, roadMat);
+    road.rotation.x = -Math.PI / 2; road.position.y = -1.0; road.receiveShadow = true; worldGroup.add(road);
+
+    // TREES
+    const trees = [];
+    const treeGeo = new THREE.ConeGeometry(1.5, 4, 4);
+    const treeMat = new THREE.MeshStandardMaterial({ map: treeTexture, flatShading: true });
+    const trunkGeo = new THREE.BoxGeometry(0.5, 1.5, 0.5);
+    const trunkMat = new THREE.MeshStandardMaterial({ color: 0x4a3c31, flatShading: true });
+
+    function createTree(x, z) {
+        const group = new THREE.Group();
+        const trunk = new THREE.Mesh(trunkGeo, trunkMat); trunk.position.y = 0.75;
+        const leaves = new THREE.Mesh(treeGeo, treeMat); leaves.position.y = 2.5;
+        group.add(trunk); group.add(leaves); group.position.set(x, -1, z);
+        const scale = 0.8 + Math.random() * 0.4; group.scale.set(scale, scale, scale);
+        scene.add(group); trees.push(group);
+    }
+    for(let i=0; i<40; i++) {
+        createTree(-6 - Math.random() * 10, -50 + Math.random() * 100);
+        createTree(6 + Math.random() * 10, -50 + Math.random() * 100);
+    }
+
+    // --- PLAYER (Blocky Jeep) ---
+    const playerGroup = new THREE.Group();
+    const bodyGeo = new THREE.BoxGeometry(1.2, 0.6, 2);
+    const bodyMat = new THREE.MeshStandardMaterial({ map: carTexture, flatShading: true }); 
+    const body = new THREE.Mesh(bodyGeo, bodyMat); body.position.y = 0.3;
+    const topGeo = new THREE.BoxGeometry(1, 0.5, 1.2);
+    const topMat = new THREE.MeshStandardMaterial({ map: metalTexture, flatShading: true }); 
+    const top = new THREE.Mesh(topGeo, topMat); top.position.y = 0.85;
+    playerGroup.add(body); playerGroup.add(top);
+
+    const wheelGeo = new THREE.BoxGeometry(0.3, 0.3, 0.3);
+    const wheelMat = new THREE.MeshStandardMaterial({ color: 0x111111 });
+    function createWheel(x, z) {
+        const w = new THREE.Mesh(wheelGeo, wheelMat); w.position.set(x, 0.15, z); return w;
+    }
+    playerGroup.add(createWheel(-0.65, -0.6)); playerGroup.add(createWheel( 0.65, -0.6));
+    playerGroup.add(createWheel(-0.65,  0.6)); playerGroup.add(createWheel( 0.65,  0.6));
+    
+    const leftLight = new THREE.SpotLight(0xffffee, 0); 
+    leftLight.position.set(-0.4, 0.5, -0.9); leftLight.target.position.set(-0.4, 0, -20);
+    leftLight.angle = 0.6; leftLight.penumbra = 0.1;
+    const rightLight = new THREE.SpotLight(0xffffee, 0);
+    rightLight.position.set(0.4, 0.5, -0.9); rightLight.target.position.set(0.4, 0, -20);
+    rightLight.angle = 0.6; rightLight.penumbra = 0.1;
+    const shieldLight = new THREE.PointLight(0xff00ff, 0, 10); shieldLight.position.set(0, 2, 0);
+    playerGroup.add(leftLight); playerGroup.add(leftLight.target);
+    playerGroup.add(rightLight); playerGroup.add(rightLight.target);
+    playerGroup.add(shieldLight); scene.add(playerGroup);
+
+    let objects = []; let particles = []; let rainParticles = [];
+
+    // --- RAIN SYSTEM ---
+    const rainGeo = new THREE.BufferGeometry();
+    const rainCount = 500;
+    const rainPos = new Float32Array(rainCount * 3);
+    for(let i=0; i<rainCount*3; i+=3) {
+        rainPos[i] = (Math.random() - 0.5) * 40;
+        rainPos[i+1] = Math.random() * 20;
+        rainPos[i+2] = (Math.random() - 0.5) * 40;
+    }
+    rainGeo.setAttribute('position', new THREE.BufferAttribute(rainPos, 3));
+    const rainMat = new THREE.PointsMaterial({ color: 0xaaaaaa, size: 0.1, transparent: true, opacity: 0 });
+    const rainSystem = new THREE.Points(rainGeo, rainMat);
+    scene.add(rainSystem);
+
+    // --- MESH GENERATORS ---
+    function createHeartMesh() {
+        const group = new THREE.Group();
+        const mat = new THREE.MeshPhongMaterial({ color: 0xff0055, flatShading: true });
+        const geo = new THREE.BoxGeometry(0.2, 0.2, 0.2);
+        const positions = [[-0.2,0.2,0],[0.2,0.2,0],[-0.4,0,0],[0,0,0],[0.4,0,0],[-0.2,-0.2,0],[0.2,-0.2,0],[0,-0.4,0]];
+        positions.forEach(p => { const box = new THREE.Mesh(geo, mat); box.position.set(p[0],p[1],p[2]); group.add(box); });
+        return group;
+    }
+
+    function createObstacleMesh() {
+        return new THREE.Mesh(new THREE.DodecahedronGeometry(0.6, 0), new THREE.MeshStandardMaterial({ map: metalTexture, flatShading: true }));
+    }
+
+    function createMudMesh() {
+        // Flat brown puddle
+        const geo = new THREE.CylinderGeometry(0.8, 0.8, 0.05, 8);
+        const mat = new THREE.MeshStandardMaterial({ color: 0x3d2817, flatShading: true });
+        const mesh = new THREE.Mesh(geo, mat);
+        return mesh;
+    }
+
+    function createRingMesh() {
+        // Gold Torus (Promise Ring)
+        const geo = new THREE.TorusGeometry(0.3, 0.08, 4, 8);
+        const mat = new THREE.MeshStandardMaterial({ color: 0xffd700, emissive: 0xaa8800, flatShading: true });
+        const mesh = new THREE.Mesh(geo, mat);
+        mesh.rotation.y = Math.PI / 2;
+        return mesh;
+    }
+
+    function createMemoryMesh() {
+        const group = new THREE.Group();
+        const box = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.8, 0.1), new THREE.MeshStandardMaterial({ color: 0xffffff, flatShading: true }));
+        const inner = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.6, 0.12), new THREE.MeshStandardMaterial({ color: 0x222222, flatShading: true }));
+        group.add(box); group.add(inner); return group;
+    }
+
+    function createGhostMesh() {
+        const group = new THREE.Group();
+        const bodyMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.9 });
+        const body = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.3, 0.8, 8), bodyMat);
+        const head = new THREE.Mesh(new THREE.SphereGeometry(0.3, 8, 8), bodyMat); head.position.y = 0.4;
+        const eyeMat = new THREE.MeshBasicMaterial({ color: 0x000000 });
+        const eyeGeo = new THREE.BoxGeometry(0.08, 0.08, 0.05);
+        const left = new THREE.Mesh(eyeGeo, eyeMat); left.position.set(-0.12, 0.45, 0.25);
+        const right = new THREE.Mesh(eyeGeo, eyeMat); right.position.set(0.12, 0.45, 0.25);
+        group.add(body); group.add(head); group.add(left); group.add(right);
+        group.position.y = 0.5; return group;
+    }
+
+    function createShieldMesh() {
+        const geo = new THREE.IcosahedronGeometry(0.5, 0); 
+        const mat = new THREE.MeshBasicMaterial({ color: 0xff00ff, wireframe: true });
+        const mesh = new THREE.Mesh(geo, mat); return mesh;
+    }
+
+    function spawnObject() {
+        if (isGameOver || isPaused) return; 
+        
+        if (isNight) {
+            let rand = Math.random();
+            if (rand > 0.9) { 
+                let mesh = createShieldMesh(); let type = 'shield';
+                mesh.position.set((Math.random() * 6) - 3, 0.5, -60);
+                scene.add(mesh); objects.push({ mesh, type });
+            } else {
+                let mesh = createGhostMesh(); let type = 'obstacle';
+                mesh.position.set((Math.random() * 6) - 3, 0.5, -60);
+                scene.add(mesh); objects.push({ mesh, type });
+            }
+            return; 
+        }
+        
+        const rand = Math.random(); 
+        let mesh, type;
+        
+        if (rand > 0.96) { // Rare Ring
+            mesh = createRingMesh(); type = 'ring';
+        } else if (rand > 0.85) { 
+            mesh = createMemoryMesh(); type = 'memory'; 
+        } else if (rand > 0.70) {
+            // Chance for Mud or Rock
+            if (Math.random() > 0.5) {
+                mesh = createMudMesh(); type = 'mud';
+            } else {
+                mesh = createObstacleMesh(); type = 'obstacle'; 
+            }
+        } else { 
+            mesh = createHeartMesh(); type = 'heart'; 
+        }
+        
+        mesh.position.set((Math.random() * 6) - 3, 0.5, -60);
+        scene.add(mesh); objects.push({ mesh, type });
+    }
+    setInterval(spawnObject, 800); 
+
+    function createExplosion(pos, color) {
+        for (let i = 0; i < 6; i++) { 
+            const geo = new THREE.BoxGeometry(0.15, 0.15, 0.15);
+            const mat = new THREE.MeshBasicMaterial({ color: color });
+            const part = new THREE.Mesh(geo, mat); part.position.copy(pos);
+            const vel = new THREE.Vector3((Math.random()-0.5), (Math.random()-0.5)+0.5, (Math.random()-0.5));
+            scene.add(part); particles.push({ mesh: part, vel: vel, life: 1.0 });
+        }
+    }
+
+    function showMemory() {
+        isPaused = true; 
+        const overlay = document.getElementById('memory-overlay');
+        const imgElement = document.getElementById('memory-img');
+        const randomSrc = memoryImages[Math.floor(Math.random() * memoryImages.length)];
+        imgElement.src = randomSrc;
+        overlay.classList.add('show');
+        setTimeout(() => { overlay.classList.remove('show'); isPaused = false; }, 3000);
+    }
+
+    function activateShield() {
+        isInvincible = true; shieldLight.intensity = 2.0; 
+        const banner = document.getElementById('message-banner');
+        banner.innerText = "SHIELD UP!"; banner.style.color = "#ff00ff"; banner.style.display = 'block';
+        if(isNight) stopHeartbeat();
+        setTimeout(() => {
+            isInvincible = false; shieldLight.intensity = 0; banner.style.display = 'none';
+            if(isNight) {
+                banner.innerText = "SURVIVE!"; banner.style.color = "#ff0000"; banner.style.display = 'block'; startHeartbeat();
+            }
+        }, 5000);
+    }
+
+    function updateWhispers() {
+        const el = document.getElementById('whisper-text');
+        const list = isNight ? nightWhispers : dayWhispers;
+        el.innerText = list[Math.floor(Math.random() * list.length)];
+        if(isNight) el.classList.add('night-text'); else el.classList.remove('night-text');
+    }
+
+    function triggerNightMode() {
+        isNight = true; document.getElementById('bgm').pause();
+        if(!isInvincible) startHeartbeat();
+        const nightCol = new THREE.Color(NIGHT_COLOR); let alpha = 0;
+        const fadeInterval = setInterval(() => {
+            alpha += 0.02; if (alpha >= 1) clearInterval(fadeInterval);
+            scene.background.lerp(nightCol, 0.05); scene.fog.color.lerp(nightCol, 0.05);
+        }, 30);
+        leftLight.intensity = 2; rightLight.intensity = 2; ambientLight.intensity = 0.1; dirLight.intensity = 0.0;
+        const banner = document.getElementById('message-banner');
+        banner.innerText = "SURVIVE!"; banner.style.color = "#ff0000"; banner.style.display = 'block';
+        document.getElementById('hud').classList.add('night-text');
+        document.getElementById('vignette').style.opacity = 1;
+        updateWhispers(); setTimeout(endNightMode, 25000);
+    }
+
+    function endNightMode() {
+        isNight = false; stopHeartbeat(); document.getElementById('bgm').play();
+        const dayCol = new THREE.Color(DAY_COLOR);
+        scene.background.set(dayCol); scene.fog.color.set(dayCol);
+        leftLight.intensity = 0; rightLight.intensity = 0; ambientLight.intensity = 0.7; dirLight.intensity = 1.0;
+        const banner = document.getElementById('message-banner');
+        banner.style.display = 'none'; document.getElementById('hud').classList.remove('night-text');
+        document.getElementById('vignette').style.opacity = 0;
+        updateWhispers();
+    }
+
+    function toggleRain() {
+        isRaining = !isRaining;
+        rainMat.opacity = isRaining ? 0.6 : 0;
+    }
+    // Randomly toggle rain every 15-30 seconds
+    setInterval(() => {
+        if (Math.random() > 0.5) toggleRain();
+    }, 20000);
+
+    let targetX = 0;
+    function onMove(clientX) {
+        if (isPaused) return;
+        const normalizedX = (clientX / window.innerWidth) * 2 - 1; targetX = normalizedX * 3.0; 
+    }
+    document.addEventListener('mousemove', (e) => onMove(e.clientX));
+    document.addEventListener('touchmove', (e) => onMove(e.touches[0].clientX));
+
+    function animate() {
+        requestAnimationFrame(animate);
+        if (isPaused) { renderer.render(scene, camera); return; }
+        
+        // Rain Animation
+        if(isRaining) {
+            const positions = rainGeo.attributes.position.array;
+            for(let i=1; i<rainCount*3; i+=3) {
+                positions[i] -= 0.5;
+                if(positions[i] < -5) positions[i] = 20;
+            }
+            rainGeo.attributes.position.needsUpdate = true;
+        }
+
+        if (isNight) {
+            const flicker = Math.random() > 0.8 ? 0.2 : 2.5; leftLight.intensity = flicker; rightLight.intensity = flicker;
+        }
+        
+        roadTexture.offset.y -= gameSpeed * 0.1;
+
+        trees.forEach(tree => {
+            tree.position.z += gameSpeed;
+            if (tree.position.z > 10) {
+                tree.position.z = -80; tree.position.x = (Math.random() > 0.5 ? -1 : 1) * (6 + Math.random() * 10);
+            }
+        });
+        if (isGameOver) return;
+        if (score > 0 && score % 10 === 0 && score !== lastNightScore) { lastNightScore = score; triggerNightMode(); }
+
+        playerGroup.position.x += (targetX - playerGroup.position.x) * 0.1;
+        playerGroup.rotation.z = (playerGroup.position.x - targetX) * 0.1;
+        
+        // --- HILL & BUMP PHYSICS ---
+        const time = Date.now() * 0.005;
+        playerGroup.rotation.x = Math.sin(time) * 0.15;
+        playerGroup.position.y = -0.9 + Math.sin(time * 5) * 0.1 + (Math.random() * 0.05);
+        camera.position.y = 4 + Math.sin(time * 5) * 0.05;
+
+        for (let i = objects.length - 1; i >= 0; i--) {
+            let obj = objects[i]; obj.mesh.position.z += gameSpeed;
+            if (obj.type === 'ring') { obj.mesh.rotation.y += 0.05; obj.mesh.rotation.x += 0.02; }
+            else if (obj.type !== 'obstacle' && obj.type !== 'mud') obj.mesh.rotation.y += 0.05;
+            else if (isNight && obj.type === 'obstacle') obj.mesh.position.x += Math.sin(Date.now() * 0.01) * 0.05;
+
+            if (playerGroup.position.distanceTo(obj.mesh.position) < 2.5) {
+                if (obj.type === 'heart') {
+                    score++; playSound('coin'); createExplosion(obj.mesh.position, 0xff0055);
+                    if (gameSpeed < 0.6) gameSpeed += 0.01; if (score >= TARGET_SCORE) endGame(true);
+                } else if (obj.type === 'memory') {
+                    playSound('photo'); showMemory(); createExplosion(obj.mesh.position, 0xffffff);
+                } else if (obj.type === 'shield') {
+                    playSound('shield'); activateShield(); createExplosion(obj.mesh.position, 0xff00ff);
+                } else if (obj.type === 'ring') {
+                    playSound('ring'); score+=5; createExplosion(obj.mesh.position, 0xffd700);
+                } else if (obj.type === 'mud') {
+                    playSound('mud'); gameSpeed = 0.1; // Slow down
+                    setTimeout(() => { if(!isPaused) gameSpeed = 0.3; }, 1000);
+                } else {
+                    if (isInvincible) { createExplosion(obj.mesh.position, 0xffffff); playSound('coin'); } 
+                    else { health--; playSound('hit'); createExplosion(obj.mesh.position, 0x888888); if (health <= 0) endGame(false); }
+                }
+                
+                if (obj.type !== 'mud') {
+                    scene.remove(obj.mesh); objects.splice(i, 1);
+                } else {
+                    // Don't remove mud immediately so you see you hit it, but move it behind camera
+                    if (obj.mesh.position.z > 2) { scene.remove(obj.mesh); objects.splice(i, 1); }
+                }
+                updateUI();
+            } else if (obj.mesh.position.z > 5) { scene.remove(obj.mesh); objects.splice(i, 1); }
+        }
+        for (let i = particles.length - 1; i >= 0; i--) {
+            let p = particles[i]; p.mesh.position.add(p.vel); p.vel.y -= 0.02; p.life -= 0.1;
+            p.mesh.scale.setScalar(p.life); if (p.life <= 0) { scene.remove(p.mesh); particles.splice(i, 1); }
+        }
+        renderer.render(scene, camera);
+    }
+
+    function updateUI() {
+        document.getElementById('score').innerText = `SCORE: ${score} / ${TARGET_SCORE}`;
+        let heartsStr = ""; for(let i=0; i<health; i++) heartsStr += "❤️";
+        document.getElementById('lives').innerText = heartsStr;
+    }
+
+    function endGame(win) {
+        isGameOver = true; stopHeartbeat();
+        const menu = document.getElementById('menu'); const title = document.getElementById('menu-title'); const msg = document.getElementById('menu-msg');
+        menu.style.display = 'block';
+        if (win) {
+            playSound('win'); title.innerText = "WE MADE IT"; title.style.color = "#ff0055";
+            msg.innerHTML = "I burned the bridges, I lit the flame,<br>Leaving us lost in this haunted game.<br>But amongst the ashes, you waited for me,<br>Your forgiveness was the light that set me free.<br>We survived the night, we outran the past,<br>A love this strong is built to last.";
+        } else {
+            title.innerText = "GAME OVER"; title.style.color = "#ff0000";
+            msg.innerText = "TRY AGAIN?";
+        }
+    }
+
+    window.startGame = function() {
+        const btn = document.getElementById('start-btn'); btn.innerText = "LOADING...";
+        if (audioCtx.state === 'suspended') { audioCtx.resume(); }
+        const bgm = document.getElementById('bgm'); bgm.volume = 0.5;
+        const playPromise = bgm.play();
+        if (playPromise !== undefined) {
+            playPromise.then(_ => {
+                document.getElementById('start-screen').style.display = 'none';
+                isGameOver = false; score = 0; health = 5; gameSpeed = 0.3; isNight = false; lastNightScore = 0; isPaused = false;
+                whisperInterval = setInterval(updateWhispers, 4000); updateWhispers(); updateUI();
+            }).catch(e => {
+                document.getElementById('start-screen').style.display = 'none'; isGameOver = false; score = 0; health = 5; gameSpeed = 0.3; updateUI();
+            });
+        }
+    }
+
+    window.restartGame = function() {
+        score = 0; health = 5; gameSpeed = 0.3; isGameOver = false; isNight = false; lastNightScore = 0; isPaused = false; isInvincible = false;
+        objects.forEach(o => scene.remove(o.mesh)); objects = [];
+        const dayCol = new THREE.Color(DAY_COLOR); scene.background.set(dayCol); scene.fog.color.set(dayCol);
+        leftLight.intensity = 0; rightLight.intensity = 0; shieldLight.intensity = 0; ambientLight.intensity = 0.7; dirLight.intensity = 1.0;
+        document.getElementById('message-banner').style.display = 'none'; document.getElementById('hud').classList.remove('night-text');
+        document.getElementById('vignette').style.opacity = 0; document.getElementById('menu').style.display = 'none';
+        stopHeartbeat(); document.getElementById('bgm').currentTime = 0; document.getElementById('bgm').play(); updateUI();
+    };
+
+    window.addEventListener('resize', () => {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+    animate();
+</script>
+</body>
+</html>
