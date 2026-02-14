@@ -160,7 +160,7 @@
 <div id="menu">
     <h1 id="menu-title">GAME OVER</h1>
     <p id="menu-msg">TRY AGAIN?</p>
-    <button onclick="restartGame()">RESTART</button>
+    <button id="menu-action-btn" onclick="handleMenuClick()">RESTART</button>
 </div>
 
 <audio id="bgm" loop preload="auto">
@@ -304,7 +304,7 @@
                 o.frequency.value=f; g.gain.setValueAtTime(0.2, t); g.gain.exponentialRampToValueAtTime(0.01, t+0.5);
                 o.start(t); o.stop(t+0.5);
             }
-            play(1200, now); play(1800, now+0.1); // Sparkle sound
+            play(1200, now); play(1800, now+0.1); 
         } else if (type === 'hit') {
             const bufferSize = audioCtx.sampleRate * 0.1;
             const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
@@ -329,6 +329,11 @@
     let isGameOver = true; let isPaused = false; 
     let isNight = false; let isInvincible = false; let lastNightScore = 0;
     let whisperInterval; let isRaining = false;
+    
+    // NEW VARS FOR LEVEL 2 (Sunset Walk)
+    let gameWon = false; 
+    let isLevel2 = false;
+    let coupleGroup;
 
     // --- SCENE SETUP ---
     const scene = new THREE.Scene();
@@ -441,15 +446,12 @@
     }
 
     function createMudMesh() {
-        // Flat brown puddle
         const geo = new THREE.CylinderGeometry(0.8, 0.8, 0.05, 8);
         const mat = new THREE.MeshStandardMaterial({ color: 0x3d2817, flatShading: true });
-        const mesh = new THREE.Mesh(geo, mat);
-        return mesh;
+        return new THREE.Mesh(geo, mat);
     }
 
     function createRingMesh() {
-        // Gold Torus (Promise Ring)
         const geo = new THREE.TorusGeometry(0.3, 0.08, 4, 8);
         const mat = new THREE.MeshStandardMaterial({ color: 0xffd700, emissive: 0xaa8800, flatShading: true });
         const mesh = new THREE.Mesh(geo, mat);
@@ -480,11 +482,11 @@
     function createShieldMesh() {
         const geo = new THREE.IcosahedronGeometry(0.5, 0); 
         const mat = new THREE.MeshBasicMaterial({ color: 0xff00ff, wireframe: true });
-        const mesh = new THREE.Mesh(geo, mat); return mesh;
+        return new THREE.Mesh(geo, mat);
     }
 
     function spawnObject() {
-        if (isGameOver || isPaused) return; 
+        if (isGameOver || isPaused || isLevel2) return; 
         
         if (isNight) {
             let rand = Math.random();
@@ -503,12 +505,11 @@
         const rand = Math.random(); 
         let mesh, type;
         
-        if (rand > 0.96) { // Rare Ring
+        if (rand > 0.96) { 
             mesh = createRingMesh(); type = 'ring';
         } else if (rand > 0.85) { 
             mesh = createMemoryMesh(); type = 'memory'; 
         } else if (rand > 0.70) {
-            // Chance for Mud or Rock
             if (Math.random() > 0.5) {
                 mesh = createMudMesh(); type = 'mud';
             } else {
@@ -557,6 +558,7 @@
     }
 
     function updateWhispers() {
+        if (isLevel2) return;
         const el = document.getElementById('whisper-text');
         const list = isNight ? nightWhispers : dayWhispers;
         el.innerText = list[Math.floor(Math.random() * list.length)];
@@ -580,6 +582,7 @@
     }
 
     function endNightMode() {
+        if(isLevel2) return;
         isNight = false; stopHeartbeat(); document.getElementById('bgm').play();
         const dayCol = new THREE.Color(DAY_COLOR);
         scene.background.set(dayCol); scene.fog.color.set(dayCol);
@@ -591,25 +594,134 @@
     }
 
     function toggleRain() {
+        if (isLevel2) return;
         isRaining = !isRaining;
         rainMat.opacity = isRaining ? 0.6 : 0;
     }
-    // Randomly toggle rain every 15-30 seconds
     setInterval(() => {
-        if (Math.random() > 0.5) toggleRain();
+        if (Math.random() > 0.5 && !isLevel2) toggleRain();
     }, 20000);
 
     let targetX = 0;
     function onMove(clientX) {
-        if (isPaused) return;
+        if (isPaused || isLevel2) return;
         const normalizedX = (clientX / window.innerWidth) * 2 - 1; targetX = normalizedX * 3.0; 
     }
     document.addEventListener('mousemove', (e) => onMove(e.clientX));
     document.addEventListener('touchmove', (e) => onMove(e.touches[0].clientX));
 
+    // --- SUNSET WALK SEQUENCE (NEXT LEVEL) ---
+    window.startSunsetWalk = function() {
+        isLevel2 = true;
+        document.getElementById('menu').style.display = 'none';
+
+        // Change environment to sunset
+        const sunsetCol = new THREE.Color(0xfd5e53); // Sunset orange/pink
+        let alpha = 0;
+        const fadeInterval = setInterval(() => {
+            alpha += 0.02;
+            if (alpha >= 1) clearInterval(fadeInterval);
+            scene.background.lerp(sunsetCol, 0.1);
+            scene.fog.color.lerp(sunsetCol, 0.1);
+        }, 50);
+
+        dirLight.color.setHex(0xffaa55);
+        dirLight.position.set(0, 5, -100); 
+        ambientLight.intensity = 0.4;
+        dirLight.intensity = 1.5;
+
+        // Hide UI & Car
+        playerGroup.visible = false; // Changed from true to false
+        document.getElementById('hud').style.display = 'none';
+        document.getElementById('message-banner').style.display = 'none';
+        document.getElementById('whisper-text').innerText = "Coming Soon...";
+        document.getElementById('whisper-text').style.color = "#ffffff";
+        document.getElementById('whisper-text').classList.remove('night-text');
+        document.getElementById('vignette').style.opacity = 0;
+
+        // Turn off rain
+        isRaining = false;
+        rainMat.opacity = 0;
+
+        // Clear objects
+        objects.forEach(o => scene.remove(o.mesh));
+        objects = [];
+        
+        // Clear particles (Fixes the frozen pink pixels)
+        particles.forEach(p => scene.remove(p.mesh));
+        particles = [];
+
+        // Adjust Camera position behind couple
+        camera.position.set(0, 2, 5);
+        camera.rotation.set(-0.2, 0, 0);
+
+        // Create Voxel Couple
+        coupleGroup = new THREE.Group();
+
+        // Guy 
+        const guyGroup = new THREE.Group();
+        const guyBody = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.6, 0.2), new THREE.MeshStandardMaterial({color: 0x3366ff}));
+        const guyHead = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.3, 0.3), new THREE.MeshStandardMaterial({color: 0xffccaa}));
+        guyBody.position.y = 0.3; guyHead.position.y = 0.75;
+        guyGroup.add(guyBody); guyGroup.add(guyHead);
+        guyGroup.position.x = -0.3;
+
+        // Girl
+        const girlGroup = new THREE.Group();
+        const girlBody = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.6, 0.2), new THREE.MeshStandardMaterial({color: 0xff3366}));
+        const girlHead = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.3, 0.3), new THREE.MeshStandardMaterial({color: 0xffccaa}));
+        girlBody.position.y = 0.3; girlHead.position.y = 0.75;
+        girlGroup.add(girlBody); girlGroup.add(girlHead);
+        girlGroup.position.x = 0.3;
+
+        coupleGroup.add(guyGroup);
+        coupleGroup.add(girlGroup);
+        coupleGroup.position.set(0, -1, 0);
+        
+        // Added the couple to the scene!
+        scene.add(coupleGroup);
+        
+        // Ensure music plays smoothly
+        if (audioCtx.state === 'suspended') audioCtx.resume();
+        const bgm = document.getElementById('bgm'); 
+        bgm.play();
+    }
+
     function animate() {
         requestAnimationFrame(animate);
         if (isPaused) { renderer.render(scene, camera); return; }
+
+        // --- NEXT LEVEL: SUNSET WALK LOGIC ---
+        if (isLevel2) {
+            // Slower ambient pacing
+            roadTexture.offset.y -= 0.01; 
+            
+            // Bobbing animation to simulate slow walking
+            const time = Date.now() * 0.003;
+            coupleGroup.position.y = -1 + Math.abs(Math.sin(time)) * 0.05;
+            
+            // Subtle head/body swaying
+            coupleGroup.children[0].rotation.z = Math.sin(time) * 0.05;
+            coupleGroup.children[1].rotation.z = -Math.sin(time) * 0.05;
+
+            // Move them very slowly into the horizon for perspective
+            coupleGroup.position.z -= 0.005;
+
+            // Move trees past camera slowly
+            trees.forEach(tree => {
+                tree.position.z += 0.05; 
+                if (tree.position.z > 10) {
+                    tree.position.z = -80; 
+                    tree.position.x = (Math.random() > 0.5 ? -1 : 1) * (6 + Math.random() * 10);
+                }
+            });
+
+            renderer.render(scene, camera);
+            return; // Skip normal game logic
+        }
+
+        // --- NORMAL GAME LOGIC ---
+        if (isGameOver) return;
         
         // Rain Animation
         if(isRaining) {
@@ -633,13 +745,12 @@
                 tree.position.z = -80; tree.position.x = (Math.random() > 0.5 ? -1 : 1) * (6 + Math.random() * 10);
             }
         });
-        if (isGameOver) return;
+        
         if (score > 0 && score % 10 === 0 && score !== lastNightScore) { lastNightScore = score; triggerNightMode(); }
 
         playerGroup.position.x += (targetX - playerGroup.position.x) * 0.1;
         playerGroup.rotation.z = (playerGroup.position.x - targetX) * 0.1;
         
-        // --- HILL & BUMP PHYSICS ---
         const time = Date.now() * 0.005;
         playerGroup.rotation.x = Math.sin(time) * 0.15;
         playerGroup.position.y = -0.9 + Math.sin(time * 5) * 0.1 + (Math.random() * 0.05);
@@ -662,7 +773,7 @@
                 } else if (obj.type === 'ring') {
                     playSound('ring'); score+=5; createExplosion(obj.mesh.position, 0xffd700);
                 } else if (obj.type === 'mud') {
-                    playSound('mud'); gameSpeed = 0.1; // Slow down
+                    playSound('mud'); gameSpeed = 0.1;
                     setTimeout(() => { if(!isPaused) gameSpeed = 0.3; }, 1000);
                 } else {
                     if (isInvincible) { createExplosion(obj.mesh.position, 0xffffff); playSound('coin'); } 
@@ -672,7 +783,6 @@
                 if (obj.type !== 'mud') {
                     scene.remove(obj.mesh); objects.splice(i, 1);
                 } else {
-                    // Don't remove mud immediately so you see you hit it, but move it behind camera
                     if (obj.mesh.position.z > 2) { scene.remove(obj.mesh); objects.splice(i, 1); }
                 }
                 updateUI();
@@ -693,14 +803,30 @@
 
     function endGame(win) {
         isGameOver = true; stopHeartbeat();
-        const menu = document.getElementById('menu'); const title = document.getElementById('menu-title'); const msg = document.getElementById('menu-msg');
+        gameWon = win; // Store the state globally
+        
+        const menu = document.getElementById('menu'); 
+        const title = document.getElementById('menu-title'); 
+        const msg = document.getElementById('menu-msg');
+        const btn = document.getElementById('menu-action-btn');
+        
         menu.style.display = 'block';
         if (win) {
             playSound('win'); title.innerText = "WE MADE IT"; title.style.color = "#ff0055";
             msg.innerHTML = "I burned the bridges, I lit the flame,<br>Leaving us lost in this haunted game.<br>But amongst the ashes, you waited for me,<br>Your forgiveness was the light that set me free.<br>We survived the night, we outran the past,<br>A love this strong is built to last.";
+            btn.innerText = "NEXT LEVEL"; // Dynamically update button
         } else {
             title.innerText = "GAME OVER"; title.style.color = "#ff0000";
             msg.innerText = "TRY AGAIN?";
+            btn.innerText = "RESTART";
+        }
+    }
+
+    window.handleMenuClick = function() {
+        if (gameWon) {
+            startSunsetWalk();
+        } else {
+            restartGame();
         }
     }
 
@@ -713,7 +839,7 @@
             playPromise.then(_ => {
                 document.getElementById('start-screen').style.display = 'none';
                 isGameOver = false; score = 0; health = 5; gameSpeed = 0.3; isNight = false; lastNightScore = 0; isPaused = false;
-                whisperInterval = setInterval(updateWhispers, 4000); updateWhispers(); updateUI();
+                whisperInterval = setInterval(updateWhispers, 2000); updateWhispers(); updateUI();
             }).catch(e => {
                 document.getElementById('start-screen').style.display = 'none'; isGameOver = false; score = 0; health = 5; gameSpeed = 0.3; updateUI();
             });
